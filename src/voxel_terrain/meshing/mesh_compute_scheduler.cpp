@@ -13,7 +13,14 @@ MeshComputeScheduler::MeshComputeScheduler(int maxConcurrentTasks)
 
 void MeshComputeScheduler::enqueue(VoxelOctreeNode &node)
 {
+#ifdef _WIN32
     ChunksToAdd.push(&node);
+#else
+    {
+        std::lock_guard<std::mutex> lock(ChunksToAddMutex);
+        ChunksToAdd.push(&node);
+    }
+#endif
 }
 
 void MeshComputeScheduler::process(JarVoxelTerrain &terrain)
@@ -37,6 +44,7 @@ void MeshComputeScheduler::process(JarVoxelTerrain &terrain)
 
 void MeshComputeScheduler::process_queue(JarVoxelTerrain &terrain)
 {
+#ifdef _WIN32
     while (!ChunksToAdd.empty())
     {
         VoxelOctreeNode *chunk;
@@ -47,7 +55,26 @@ void MeshComputeScheduler::process_queue(JarVoxelTerrain &terrain)
         else
             return;
     }
+#else
+    while (true)
+    {
+        VoxelOctreeNode *chunk = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(ChunksToAddMutex);
+            if (ChunksToAdd.empty())
+                break;
+            chunk = ChunksToAdd.top();
+            ChunksToAdd.pop();
+        }
+        if (chunk != nullptr)
+        {
+            run_task(terrain, *chunk);
+        }
+    }
+#endif
 }
+
+
 
 void MeshComputeScheduler::run_task(const JarVoxelTerrain &terrain, VoxelOctreeNode &chunk)
 {

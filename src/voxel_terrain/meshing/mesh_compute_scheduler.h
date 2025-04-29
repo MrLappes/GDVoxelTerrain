@@ -3,8 +3,14 @@
 
 #include "voxel_octree_node.h"
 #include <atomic>
+#ifdef _WIN32
 #include <concurrent_queue.h>
 #include <concurrent_priority_queue.h>
+#else
+#include <tbb/concurrent_queue.h>
+#include <queue>
+#include <mutex>
+#endif
 #include <functional>
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/variant/vector3.hpp>
@@ -25,8 +31,15 @@ struct ChunkComparator {
 class MeshComputeScheduler
 {
   private:
+    #ifdef _WIN32
     concurrency::concurrent_priority_queue<VoxelOctreeNode*, ChunkComparator> ChunksToAdd;
     concurrency::concurrent_queue<std::pair<VoxelOctreeNode*, ChunkMeshData*>> ChunksToProcess;
+    #else
+    std::priority_queue<VoxelOctreeNode*, std::vector<VoxelOctreeNode*>, ChunkComparator> ChunksToAdd;
+    tbb::concurrent_queue<std::pair<VoxelOctreeNode*, ChunkMeshData*>> ChunksToProcess;
+    std::mutex ChunksToAddMutex;
+    #endif
+  
 
     std::atomic<int> _activeTasks;
     int _maxConcurrentTasks;

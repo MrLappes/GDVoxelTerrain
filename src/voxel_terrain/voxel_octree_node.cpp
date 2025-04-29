@@ -114,7 +114,7 @@ JarVoxelChunk *VoxelOctreeNode::get_chunk() const
     return _chunk;
 }
 
-inline bool VoxelOctreeNode::is_chunk(const JarVoxelTerrain &terrain) const
+bool VoxelOctreeNode::is_chunk(const JarVoxelTerrain &terrain) const
 {
     return _size == (LoD + terrain.get_min_chunk_size());
 }

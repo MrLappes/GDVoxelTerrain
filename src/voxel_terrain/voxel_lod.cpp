@@ -69,7 +69,7 @@ inline bool JarVoxelLoD::is_in_lod_shell(int lod, glm::vec3 pos, glm::vec3 cam_p
     return dist < (grid_size * _shellSize);
 }
 
-inline int JarVoxelLoD::lod_at(const glm::vec3 &position) const {
+int JarVoxelLoD::lod_at(const glm::vec3 &position) const {
     constexpr float rChunksize = 1.0f / 16.0f;
     glm::vec3 pos = position * rChunksize;
     glm::vec3 cam_pos = _cameraPosition * rChunksize;
