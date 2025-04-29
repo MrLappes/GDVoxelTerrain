@@ -13,14 +13,7 @@ MeshComputeScheduler::MeshComputeScheduler(int maxConcurrentTasks)
 
 void MeshComputeScheduler::enqueue(VoxelOctreeNode &node)
 {
-#ifdef _WIN32
     ChunksToAdd.push(&node);
-#else
-    {
-        std::lock_guard<std::mutex> lock(ChunksToAddMutex);
-        ChunksToAdd.push(&node);
-    }
-#endif
 }
 
 void MeshComputeScheduler::process(JarVoxelTerrain &terrain)
@@ -36,7 +29,6 @@ void MeshComputeScheduler::process(JarVoxelTerrain &terrain)
         if (ChunksToProcess.try_pop(tuple))
         {
             auto [node, chunkMeshData] = tuple;
-            // if(!node->is_chunk(terrain)) return;
             node->update_chunk(terrain, chunkMeshData);
         }
     }
@@ -44,44 +36,32 @@ void MeshComputeScheduler::process(JarVoxelTerrain &terrain)
 
 void MeshComputeScheduler::process_queue(JarVoxelTerrain &terrain)
 {
-#ifdef _WIN32
-    while (!ChunksToAdd.empty())
-    {
-        VoxelOctreeNode *chunk;
-        if (ChunksToAdd.try_pop(chunk))
-        {
-            run_task(terrain, *chunk);
-        }
-        else
-            return;
-    }
-#else
-    while (true)
+    while (_activeTasks < _maxConcurrentTasks && !ChunksToAdd.empty())
     {
         VoxelOctreeNode *chunk = nullptr;
+        if (ChunksToAdd.try_pop(chunk) && chunk != nullptr)
         {
-            std::lock_guard<std::mutex> lock(ChunksToAddMutex);
-            if (ChunksToAdd.empty())
-                break;
-            chunk = ChunksToAdd.top();
-            ChunksToAdd.pop();
-        }
-        if (chunk != nullptr)
-        {
-            run_task(terrain, *chunk);
+            _activeTasks++;
+            threadPool.enqueue([this, &terrain, chunk]() {
+                this->run_task(terrain, *chunk);
+            });
         }
     }
-#endif
+
+    std::pair<VoxelOctreeNode *, ChunkMeshData *> result;
+    while (ChunksToProcess.try_pop(result))
+    {
+        // Process the completed chunks
+        auto [node, chunkMeshData] = result;
+        node->update_chunk(terrain, chunkMeshData);
+    }
 }
-
-
 
 void MeshComputeScheduler::run_task(const JarVoxelTerrain &terrain, VoxelOctreeNode &chunk)
 {
     if (!chunk.is_chunk(terrain))
         return;
     threadPool.enqueue([this, &terrain, &chunk]() {
-        // auto meshCompute = AdaptiveSurfaceNets(terrain, chunk);
         auto meshCompute = StitchedSurfaceNets(terrain, chunk);
         ChunkMeshData *chunkMeshData = meshCompute.generate_mesh_data(terrain);
         ChunksToProcess.push(std::make_pair(&(chunk), chunkMeshData));
@@ -91,7 +71,14 @@ void MeshComputeScheduler::run_task(const JarVoxelTerrain &terrain, VoxelOctreeN
 
 void MeshComputeScheduler::clear_queue()
 {
-    //if we readd this, ensure to unenqueue all nodes!
-    // ChunksToAdd.clear();
-    // ChunksToProcess.clear();
+    VoxelOctreeNode *chunk = nullptr;
+    while (ChunksToAdd.try_pop(chunk))
+    {
+    }
+
+    std::pair<VoxelOctreeNode *, ChunkMeshData *> result;
+    while (ChunksToProcess.try_pop(result))
+    {
+        delete result.second;
+    }
 }

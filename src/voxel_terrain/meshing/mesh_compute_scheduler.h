@@ -8,8 +8,7 @@
 #include <concurrent_priority_queue.h>
 #else
 #include <tbb/concurrent_queue.h>
-#include <queue>
-#include <mutex>
+#include <tbb/concurrent_priority_queue.h>
 #endif
 #include <functional>
 #include <godot_cpp/classes/node3d.hpp>
@@ -35,12 +34,10 @@ class MeshComputeScheduler
     concurrency::concurrent_priority_queue<VoxelOctreeNode*, ChunkComparator> ChunksToAdd;
     concurrency::concurrent_queue<std::pair<VoxelOctreeNode*, ChunkMeshData*>> ChunksToProcess;
     #else
-    std::priority_queue<VoxelOctreeNode*, std::vector<VoxelOctreeNode*>, ChunkComparator> ChunksToAdd;
+    tbb::concurrent_priority_queue<VoxelOctreeNode*, ChunkComparator> ChunksToAdd;
     tbb::concurrent_queue<std::pair<VoxelOctreeNode*, ChunkMeshData*>> ChunksToProcess;
-    std::mutex ChunksToAddMutex;
     #endif
   
-
     std::atomic<int> _activeTasks;
     int _maxConcurrentTasks;
 
